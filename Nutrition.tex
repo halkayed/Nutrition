@@ -1,0 +1,702 @@
+\documentclass[]{article}
+\usepackage{lmodern}
+\usepackage{amssymb,amsmath}
+\usepackage{ifxetex,ifluatex}
+\usepackage{fixltx2e} % provides \textsubscript
+\ifnum 0\ifxetex 1\fi\ifluatex 1\fi=0 % if pdftex
+  \usepackage[T1]{fontenc}
+  \usepackage[utf8]{inputenc}
+\else % if luatex or xelatex
+  \ifxetex
+    \usepackage{mathspec}
+  \else
+    \usepackage{fontspec}
+  \fi
+  \defaultfontfeatures{Ligatures=TeX,Scale=MatchLowercase}
+\fi
+% use upquote if available, for straight quotes in verbatim environments
+\IfFileExists{upquote.sty}{\usepackage{upquote}}{}
+% use microtype if available
+\IfFileExists{microtype.sty}{%
+\usepackage{microtype}
+\UseMicrotypeSet[protrusion]{basicmath} % disable protrusion for tt fonts
+}{}
+\usepackage[margin=0.25in]{geometry}
+\usepackage{hyperref}
+\hypersetup{unicode=true,
+            pdftitle={Nutrition},
+            pdfauthor={Hesham Al Kayed},
+            pdfborder={0 0 0},
+            breaklinks=true}
+\urlstyle{same}  % don't use monospace font for urls
+\usepackage{longtable,booktabs}
+\usepackage{graphicx,grffile}
+\makeatletter
+\def\maxwidth{\ifdim\Gin@nat@width>\linewidth\linewidth\else\Gin@nat@width\fi}
+\def\maxheight{\ifdim\Gin@nat@height>\textheight\textheight\else\Gin@nat@height\fi}
+\makeatother
+% Scale images if necessary, so that they will not overflow the page
+% margins by default, and it is still possible to overwrite the defaults
+% using explicit options in \includegraphics[width, height, ...]{}
+\setkeys{Gin}{width=\maxwidth,height=\maxheight,keepaspectratio}
+\IfFileExists{parskip.sty}{%
+\usepackage{parskip}
+}{% else
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{6pt plus 2pt minus 1pt}
+}
+\setlength{\emergencystretch}{3em}  % prevent overfull lines
+\providecommand{\tightlist}{%
+  \setlength{\itemsep}{0pt}\setlength{\parskip}{0pt}}
+\setcounter{secnumdepth}{5}
+% Redefines (sub)paragraphs to behave more like sections
+\ifx\paragraph\undefined\else
+\let\oldparagraph\paragraph
+\renewcommand{\paragraph}[1]{\oldparagraph{#1}\mbox{}}
+\fi
+\ifx\subparagraph\undefined\else
+\let\oldsubparagraph\subparagraph
+\renewcommand{\subparagraph}[1]{\oldsubparagraph{#1}\mbox{}}
+\fi
+
+%%% Use protect on footnotes to avoid problems with footnotes in titles
+\let\rmarkdownfootnote\footnote%
+\def\footnote{\protect\rmarkdownfootnote}
+
+%%% Change title format to be more compact
+\usepackage{titling}
+
+% Create subtitle command for use in maketitle
+\providecommand{\subtitle}[1]{
+  \posttitle{
+    \begin{center}\large#1\end{center}
+    }
+}
+
+\setlength{\droptitle}{-2em}
+
+  \title{Nutrition}
+    \pretitle{\vspace{\droptitle}\centering\huge}
+  \posttitle{\par}
+    \author{Hesham Al Kayed}
+    \preauthor{\centering\large\emph}
+  \postauthor{\par}
+      \predate{\centering\large\emph}
+  \postdate{\par}
+    \date{8/13/2019}
+
+\usepackage{float}
+\floatplacement{figure}{H}
+
+\begin{document}
+\maketitle
+
+\hypertarget{introduction}{%
+\section{Introduction}\label{introduction}}
+
+~~~ This project aims to build a model that can predict which food is
+\texttt{Raw} and which is \texttt{Processed} by examining the food
+nutrition values and use them as predictors. We will use Nutrition data
+from \texttt{U.S.\ DEPARTMENT\ OF\ AGRICULTURE} website.\footnote{\url{https://www.ars.usda.gov/ARSUserFiles/80400525/Data/SR-Legacy/SR-Leg_ASC.zip}}.
+
+In \texttt{Section\ 2.1} we Build our data set and format the result as
+needed. In \texttt{Section\ 2.2} we explore our data to find the
+difference between \texttt{Raw} and \texttt{Processed} food, this
+exploration will be based on \texttt{food\ groups}, which will help us
+make sense of the data at hand. In \texttt{Section\ 3} we will build a
+tree based model and compare the performance of different models.
+
+\hypertarget{exploratory-data-analysis}{%
+\section{Exploratory data analysis}\label{exploratory-data-analysis}}
+
+\hypertarget{data-structure}{%
+\subsection{Data Structure}\label{data-structure}}
+
+~~~ Downloaded data will contain a documentation file and data files. as
+mentioned in the documentation, data files are carrot `\^{}' delimited.
+We will use and connect \texttt{NUT\_DATA}, \texttt{NUTR\_DEF},
+\texttt{FOOD\_DESC} and \texttt{FD\_GROUP} tables as described in the
+documentation. then we will select needed fields and rename them as
+follow \textbf{ProdID = NDB\_No , NutrVal = Nutr\_Val, ShrtDesc =
+Shrt\_Desc , FoodGroup = FdGrp\_Desc}. (left of the equal sign is the
+new name)
+
+\begin{longtable}[]{@{}lrlllll@{}}
+\caption{Data Set}\tabularnewline
+\toprule
+ProdID & NutrVal & Units & NutrDesc & ShrtDesc & ManufacName &
+FoodGroup\tabularnewline
+\midrule
+\endfirsthead
+\toprule
+ProdID & NutrVal & Units & NutrDesc & ShrtDesc & ManufacName &
+FoodGroup\tabularnewline
+\midrule
+\endhead
+01001 & 717 & kcal & Energy & BUTTER,WITH SALT & NA & Dairy and Egg
+Products\tabularnewline
+01001 & 0 & mg & Caffeine & BUTTER,WITH SALT & NA & Dairy and Egg
+Products\tabularnewline
+01001 & 0 & mg & Theobromine & BUTTER,WITH SALT & NA & Dairy and Egg
+Products\tabularnewline
+01001 & 24 & mg & Calcium, Ca & BUTTER,WITH SALT & NA & Dairy and Egg
+Products\tabularnewline
+01001 & 2 & mg & Magnesium, Mg & BUTTER,WITH SALT & NA & Dairy and Egg
+Products\tabularnewline
+01001 & 24 & mg & Phosphorus, P & BUTTER,WITH SALT & NA & Dairy and Egg
+Products\tabularnewline
+\bottomrule
+\end{longtable}
+
+\begin{longtable}[]{@{}llllllll@{}}
+\caption{Types and Missing Data}\tabularnewline
+\toprule
+& ProdID & NutrVal & Units & NutrDesc & ShrtDesc & ManufacName &
+FoodGroup\tabularnewline
+\midrule
+\endfirsthead
+\toprule
+& ProdID & NutrVal & Units & NutrDesc & ShrtDesc & ManufacName &
+FoodGroup\tabularnewline
+\midrule
+\endhead
+Type & character & double & character & character & character &
+character & character\tabularnewline
+NA & 0 & 0 & 0 & 0 & 0 & 426413 & 0\tabularnewline
+Empty & 0 & 0 & 0 & 0 & 0 & 0 & 0\tabularnewline
+\bottomrule
+\end{longtable}
+
+\begin{longtable}[]{@{}rrrrrrr@{}}
+\caption{Unique Values}\tabularnewline
+\toprule
+ProdID & NutrVal & Units & NutrDesc & ShrtDesc & ManufacName &
+FoodGroup\tabularnewline
+\midrule
+\endfirsthead
+\toprule
+ProdID & NutrVal & Units & NutrDesc & ShrtDesc & ManufacName &
+FoodGroup\tabularnewline
+\midrule
+\endhead
+7793 & 17446 & 5 & 97 & 7790 & 139 & 25\tabularnewline
+\bottomrule
+\end{longtable}
+
+~~~ As we can see in \emph{Table.2} all variables are complete except
+for \texttt{ManufacName}, which as per downloaded documentation is only
+available if possible. Our data set have 7 variables and 468669 records.
+we can see from \emph{Table.3} that we have 7793 products and 7790
+descriptions which indicates a duplicated product ID.
+
+\newpage
+
+\begin{longtable}[]{@{}ll@{}}
+\caption{Duplicated IDs}\tabularnewline
+\toprule
+ProdID & ShrtDesc\tabularnewline
+\midrule
+\endfirsthead
+\toprule
+ProdID & ShrtDesc\tabularnewline
+\midrule
+\endhead
+04657 & OIL,INDUSTRIAL,PALM KERNEL (HYDROGENATED),CONFECTION
+FAT\tabularnewline
+04658 & OIL,INDUSTRIAL,PALM KERNEL (HYDROGENATED),CONFECTION
+FAT\tabularnewline
+13351 & BEEF,CHUCK,UNDER BLADE CNTR STEAK,BNLESS,DENVER CUT,LN,0"
+FA\tabularnewline
+13352 & BEEF,CHUCK,UNDER BLADE CNTR STEAK,BNLESS,DENVER CUT,LN,0"
+FA\tabularnewline
+25000 & POPCORN,OIL-POPPED,LOFAT\tabularnewline
+25001 & POPCORN,OIL-POPPED,LOFAT\tabularnewline
+\bottomrule
+\end{longtable}
+
+by removing duplicated IDs we get the below table.
+
+\begin{longtable}[]{@{}rrrrrrr@{}}
+\caption{Unique Values}\tabularnewline
+\toprule
+ProdID & NutrVal & Units & NutrDesc & ShrtDesc & ManufacName &
+FoodGroup\tabularnewline
+\midrule
+\endfirsthead
+\toprule
+ProdID & NutrVal & Units & NutrDesc & ShrtDesc & ManufacName &
+FoodGroup\tabularnewline
+\midrule
+\endhead
+7790 & 17443 & 5 & 97 & 7790 & 139 & 25\tabularnewline
+\bottomrule
+\end{longtable}
+
+\hypertarget{data-description}{%
+\subsection{Data Description}\label{data-description}}
+
+~~~ As we want to build a model to classify \emph{raw foods} from
+\emph{processed food} we will start by exploring the difference between
+raw and processed food. we will separate raw foods from processed foods
+by searching for \textbf{`RAW'}, in the short description field using
+the following Reg. expression
+\texttt{\textquotesingle{}(?\textless{}!{[}:alpha:{]})RAW(?!{[}:alpha:{]})\textquotesingle{}},
+and we will consider every product in
+\texttt{Sausages\ and\ Luncheon\ Meats} as processed product and every
+product in \texttt{Spices\ and\ Herbs} as raw food, Available data have
+6374 Processed products and 1416 raw foods.\footnote{We have to note
+  that this method of differentiating between raw and processed food may
+  not include all cases. but because we don't know how the data is
+  constructed and their is no mention to this information in the
+  documentation, we will assume that this method is correct}.
+
+\begin{figure}
+
+{\centering \includegraphics{Nutrition_files/figure-latex/unnamed-chunk-2-1} 
+
+}
+
+\caption{Comparing Raw and Processed Foods Energy Values}\label{fig:unnamed-chunk-2}
+\end{figure}
+
+\emph{Fig.1} shows that Processed food on average have more kaloris per
+100g. we can see that this does not apply to
+\texttt{Legumes\ and\ Legume\ Product}. \emph{Fig.2} Shows the median
+value for each of the energy sources in food, we can see that most raw
+foods do not have sugar in them and processed food does, raw
+\texttt{Legumes\ and\ Legume\ Product} have more protein and more
+carbohydrate than processed \texttt{Legumes\ and\ Legume\ Product},
+which can explain why raw \texttt{Legumes\ and\ Legume\ Product} has
+more energy than processed \texttt{Legumes\ and\ Legume\ Product} and
+other food groups don't.
+
+Fiber content per 100g does not deffer much between processed and raw
+foods, except for \texttt{Legumes\ and\ Legume\ Products} as shown in
+\emph{Fig.3}. we can see in \emph{Fig.4} that all raw foods except
+\texttt{Legumes\ and\ Legume\ Product} have more water content.
+
+\begin{figure}
+
+{\centering \includegraphics{Nutrition_files/figure-latex/unnamed-chunk-3-1} 
+
+}
+
+\caption{Energy Sources In Food}\label{fig:unnamed-chunk-3}
+\end{figure}
+
+~~~ \emph{Fig.5} and \emph{Fig.6} show the content of \texttt{Minerals}
+and \texttt{Vitamins} in each food group and enable us to compare raw
+and processed foods in that group. scale used is based on the
+\textbf{median value} for each group. Numerical values shows
+\textbf{q75, median and q25} (Upper, meddle and lower).
+
+At first glance we can see that raw foods rarely contains any
+\texttt{Fluoride,\ F} and most processed foods contain
+\texttt{Fluoride,\ F}. \texttt{Sodium,\ Na} will range higher in
+processed products compared to raw foods, but again
+\texttt{Legumes\ and\ Legume\ Products} values are higher in its raw
+form compared to its processed form.
+
+\texttt{Calcium,\ Ca} to my surprise scours the highest in
+\texttt{Spices\ and\ Herbs} in its raw form, with more than double the
+value compared to \texttt{Dairy\ and\ Egg\ Products} in its processed
+form. \texttt{Spices\ and\ Herbs} have the highest \texttt{Iron,\ Fe},
+\texttt{Manganese,\ Mn} in all food groups, and high content value for
+other Minerals, although you cant eat much \texttt{Spices\ and\ Herbs}
+in one day, mixing them with food seems like a nutritious idea.
+
+we can find another difference in \texttt{Vintamin\ C} as we can see
+that it rangers higher in raw foods, and its main source are plants
+sourced food,
+\texttt{Vegetables,\ Fruits,\ Nuts/Seeds\ and\ Spices/Herbs}.
+
+above are a small part of our data. we can further explore the ratio of
+fat and carbohydrates different types in each food group and much more.
+but we cant explore every detail in this project because this is a much
+larger subject, and i don't have domain knowledge to do so.
+
+\newpage
+
+\begin{figure}
+
+{\centering \includegraphics{Nutrition_files/figure-latex/unnamed-chunk-4-1} 
+
+}
+
+\caption{Fiber In Food}\label{fig:unnamed-chunk-4}
+\end{figure}
+
+\begin{figure}
+
+{\centering \includegraphics{Nutrition_files/figure-latex/unnamed-chunk-5-1} 
+
+}
+
+\caption{Water In Food}\label{fig:unnamed-chunk-5}
+\end{figure}
+
+\newpage
+
+\begin{figure}
+\centering
+\includegraphics{Nutrition_files/figure-latex/unnamed-chunk-6-1.pdf}
+\caption{Minerals in Food}
+\end{figure}
+
+\newpage
+
+\begin{figure}
+\centering
+\includegraphics{Nutrition_files/figure-latex/unnamed-chunk-7-1.pdf}
+\caption{Vitamins in Food}
+\end{figure}
+
+\newpage
+
+\hypertarget{building-our-model}{%
+\section{Building Our Model}\label{building-our-model}}
+
+~~~ We want to build a model that can classify if a food product is
+\texttt{Raw} or \texttt{Processed} using its nutrition values. We will
+use tree based models, because they are easy to use and they will reveal
+more differences between raw and processed foods by finding variable
+importance in our model. we will split our data set based on
+\texttt{RawFood} field into training and test sets. any nutrients
+defined as \texttt{added} will be deleted. Below shows the structure of
+our training set.
+
+we will compare \emph{ctree} from \emph{party} package, \emph{gbm} from
+\emph{gbm} package and \emph{ranger} from \emph{ranger} package. we will
+not use \texttt{FoodGroup} field to build our model, but we will keep it
+to compare the performance of our models through different food groups.
+
+\begin{verbatim}
+## Classes 'tbl_df', 'tbl' and 'data.frame':    3895 obs. of  97 variables:
+##  $ FoodGroup                         : Factor w/ 25 levels "American Indian/Alaska Native Foods",..: 8 8 8 8 8 8 8 8 8 8 ...
+##  $ RawFood                           : Factor w/ 2 levels "PROC","RAW": 1 1 1 1 1 1 1 1 1 1 ...
+##  $ Alanine                           : num  0.029 0.67 0.659 0.409 0.639 0.823 0.958 0.691 0.741 0.757 ...
+##  $ Alcohol, ethyl                    : num  0 0 0 0 0 0 0 0 0 0 ...
+##  $ Arginine                          : num  0.031 0.874 0.883 0.467 0.47 ...
+##  $ Ash                               : num  2.11 3.18 3.6 1.27 5.2 3.79 4.3 3.55 3.27 3.83 ...
+##  $ Aspartic acid                     : num  0.064 1.588 1.502 0.963 0.779 ...
+##  $ Beta-sitosterol                   : num  4 0 0 0 0 0 0 0 0 0 ...
+##  $ Betaine                           : num  0.3 0 0 0.6 0 0 0 0 0 0.7 ...
+##  $ Caffeine                          : num  0 0 0 0 0 0 0 0 0 0 ...
+##  $ Calcium, Ca                       : num  24 674 643 111 493 ...
+##  $ Campesterol                       : num  0 0 0 0 0 0 0 0 0 0 ...
+##  $ Carbohydrate, by difference       : num  0.06 2.79 4.78 4.76 3.88 1.55 0.36 0.68 2.77 5.58 ...
+##  $ Carotene, alpha                   : num  0 0 0 0 0 0 0 0 0 0 ...
+##  $ Carotene, beta                    : num  158 76 0 6 3 32 33 78 41 51 ...
+##  $ Cholesterol                       : num  215 94 103 12 89 116 110 89 64 64 ...
+##  $ Choline, total                    : num  18.8 15.4 0 16.3 15.4 15.4 15.4 15.4 15.4 14.2 ...
+##  $ Copper, Cu                        : num  0 0.024 0.042 0.033 0.032 0.025 0.032 0.032 0.025 0.033 ...
+##  $ Cryptoxanthin, beta               : num  0 0 0 0 0 0 0 0 0 0 ...
+##  $ Cystine                           : num  0.008 0.131 0.117 0.062 0.083 0.261 0.304 0.123 0.144 0.124 ...
+##  $ Dihydrophylloquinone              : num  0 0 0 0 0 0 0 0 0 0 ...
+##  $ Energy                            : num  717 371 387 81 265 389 413 373 254 295 ...
+##  $ Fatty acids, total monounsaturated: num  21.021 8.598 8.671 0.516 4.623 ...
+##  $ Fatty acids, total polyunsaturated: num  3.043 0.784 0.87 0.083 0.591 ...
+##  $ Fatty acids, total saturated      : num  51.37 18.76 19.48 1.24 13.3 ...
+##  $ Fatty acids, total trans          : num  3.278 0 0 0.067 0 ...
+##  $ Fatty acids, total trans-monoenoic: num  2.982 0 0 0.054 0 ...
+##  $ Fatty acids, total trans-polyenoic: num  0.296 0 0 0.013 0 0 0 0 0 0.138 ...
+##  $ Fiber, total dietary              : num  0 0 0 0 0 0 0 0 0 0 ...
+##  $ Fluoride, F                       : num  2.8 0 0 0 0 0 0 0 0 0 ...
+##  $ Folate, DFE                       : num  3 20 18 8 32 6 10 18 9 27 ...
+##  $ Folate, food                      : num  3 20 18 8 32 6 10 18 9 27 ...
+##  $ Folate, total                     : num  3 20 18 8 32 6 10 18 9 27 ...
+##  $ Folic acid                        : num  0 0 0 0 0 0 0 0 0 0 ...
+##  $ Fructose                          : num  0 0 0 0 0 0 0 0 0 0 ...
+##  $ Galactose                         : num  0 0 0 0.12 0 0 0 0 0 0.78 ...
+##  $ Glucose (dextrose)                : num  0 0 0 0 0 0 0 0 0 0 ...
+##  $ Glutamic acid                     : num  0.178 5.515 5.718 2.446 2.421 ...
+##  $ Glycine                           : num  0.018 0.437 0.403 0.209 0.097 0.457 0.533 0.422 0.464 0.551 ...
+##  $ Histidine                         : num  0.023 0.823 0.821 0.306 0.397 ...
+##  $ Hydroxyproline                    : num  0 0 0 0 0 0 0 0 0 0 ...
+##  $ Iron, Fe                          : num  0.02 0.43 0.21 0.13 0.65 0.23 0.17 0.72 0.22 0.22 ...
+##  $ Isoleucine                        : num  0.051 1.137 1.451 0.556 0.803 ...
+##  $ Lactose                           : num  0 0 0 3.87 0 0 0 0 0 1.12 ...
+##  $ Leucine                           : num  0.083 2.244 2.238 1.049 1.395 ...
+##  $ Lutein + zeaxanthin               : num  0 0 0 0 0 0 0 0 0 0 ...
+##  $ Lycopene                          : num  0 0 0 0 0 0 0 0 0 0 ...
+##  $ Lysine                            : num  0.067 2.124 1.945 0.878 1.219 ...
+##  $ Magnesium, Mg                     : num  2 24 21 9 19 14 36 27 23 27 ...
+##  $ Maltose                           : num  0 0 0 0 0 0 0 0 0 0 ...
+##  $ Manganese, Mn                     : num  0 0.012 0.012 0.015 0.028 0.014 0.017 0.011 0.01 0.039 ...
+##  $ Menaquinone-4                     : num  0 0 0 0 0 0 0 0 0 4.1 ...
+##  $ Methionine                        : num  0.021 0.565 0.612 0.253 0.368 0.706 0.822 0.641 0.677 0.551 ...
+##  $ Niacin                            : num  0.042 0.118 0.08 0.103 0.991 0.15 0.106 0.093 0.105 0.111 ...
+##  $ Pantothenic acid                  : num  0.11 0.288 0.413 0.524 0.967 0.429 0.562 0.21 0.079 0.429 ...
+##  $ Phenylalanine                     : num  0.041 1.231 1.231 0.543 0.675 ...
+##  $ Phosphorus, P                     : num  24 451 464 150 337 346 605 444 463 548 ...
+##  $ Phytosterols                      : num  0 0 0 0 0 0 0 0 0 0 ...
+##  $ Potassium, K                      : num  24 136 95 125 62 64 81 81 84 188 ...
+##  $ Proline                           : num  0.082 2.575 2.634 1.155 1.378 ...
+##  $ Protein                           : num  0.85 23.24 23.37 10.45 14.21 ...
+##  $ Retinol                           : num  671 286 220 68 125 258 268 192 124 223 ...
+##  $ Riboflavin                        : num  0.034 0.351 0.293 0.251 0.844 0.204 0.279 0.39 0.303 0.353 ...
+##  $ Selenium, Se                      : num  1 14.5 14.5 11.9 15 14.5 14.5 14.5 14.4 27.6 ...
+##  $ Serine                            : num  0.046 1.289 1.366 0.601 1.169 ...
+##  $ Sodium, Na                        : num  643 560 700 308 1139 ...
+##  $ Starch                            : num  0 0 0 0 0 0 0 0 0 0 ...
+##  $ Stigmasterol                      : num  0 0 0 0 0 0 0 0 0 0 ...
+##  $ Sucrose                           : num  0 0 0 0 0 0 0 0 0 0 ...
+##  $ Sugars, total                     : num  0.06 0.51 0 4 0 1.55 0.36 0.5 1.13 1.9 ...
+##  $ Theobromine                       : num  0 0 0 0 0 0 0 0 0 0 ...
+##  $ Thiamin                           : num  0.005 0.014 0.046 0.02 0.154 0.021 0.06 0.015 0.018 0.024 ...
+##  $ Threonine                         : num  0.038 0.882 0.832 0.47 0.637 ...
+##  $ Tocopherol, beta                  : num  0 0 0 0 0 0 0 0 0 0 ...
+##  $ Tocopherol, delta                 : num  0 0 0 0 0 0 0 0 0 0 ...
+##  $ Tocopherol, gamma                 : num  0 0 0 0 0 0 0 0 0 0.03 ...
+##  $ Tocotrienol, alpha                : num  0 0 0 0 0 0 0 0 0 0 ...
+##  $ Tocotrienol, beta                 : num  0 0 0 0 0 0 0 0 0 0 ...
+##  $ Tocotrienol, delta                : num  0 0 0 0 0 0 0 0 0 0 ...
+##  $ Tocotrienol, gamma                : num  0 0 0 0 0 0 0 0 0 0 ...
+##  $ Total lipid (fat)                 : num  81.11 29.68 30.6 2.27 21.49 ...
+##  $ Tryptophan                        : num  0.012 0.324 0.3 0.138 0.2 0.361 0.421 0.315 0.339 0.551 ...
+##  $ Tyrosine                          : num  0.041 1.115 1.128 0.568 0.668 ...
+##  $ Valine                            : num  0.057 1.472 1.56 0.703 1.065 ...
+##  $ Vitamin A, IU                     : num  2499 1080 985 236 422 ...
+##  $ Vitamin A, RAE                    : num  684 292 233 68 125 261 271 198 127 227 ...
+##  $ Vitamin B-12                      : num  0.17 1.26 0.83 0.47 1.69 1.68 1.6 0.83 0.82 1.68 ...
+##  $ Vitamin B-6                       : num  0.003 0.065 0.074 0.057 0.424 0.083 0.081 0.079 0.07 0.1 ...
+##  $ Vitamin C, total ascorbic acid    : num  0 0 0 0 0 0 0 0 0 0 ...
+##  $ Vitamin D                         : num  0 22 0 0 16 23 24 22 12 15 ...
+##  $ Vitamin D (D2 + D3)               : num  0 0.5 0 0 0.4 0.6 0.6 0.6 0.3 0.4 ...
+##  $ Vitamin D2 (ergocalciferol)       : num  0 0 0 0 0 0 0 0 0 0 ...
+##  $ Vitamin D3 (cholecalciferol)      : num  0 0.5 0 0 0.4 0.6 0.6 0.6 0.3 0.4 ...
+##  $ Vitamin E (alpha-tocopherol)      : num  2.32 0.26 0 0.08 0.18 0.27 0.28 0.26 0.14 0.5 ...
+##  $ Vitamin K (phylloquinone)         : num  7 2.5 0 0 1.8 2.6 2.7 2.5 1.6 1.3 ...
+##  $ Water                             : num  16.2 41.1 37.6 81.2 55.2 ...
+##  $ Zinc, Zn                          : num  0.09 2.6 2.79 0.51 2.88 3.5 3.9 3 2.76 3.62 ...
+\end{verbatim}
+
+\newpage
+
+\begin{longtable}[]{@{}lrrrrrr@{}}
+\caption{Model Performance, Training Set}\tabularnewline
+\toprule
+& ctree\_Training & gbm\_Training & ranger\_Training & ctree\_Test &
+gbm\_Test & ranger\_Test\tabularnewline
+\midrule
+\endfirsthead
+\toprule
+& ctree\_Training & gbm\_Training & ranger\_Training & ctree\_Test &
+gbm\_Test & ranger\_Test\tabularnewline
+\midrule
+\endhead
+Sensitivity & 0.811 & 0.842 & 1.000 & 0.742 & 0.758 &
+0.770\tabularnewline
+Specificity & 0.968 & 0.978 & 1.000 & 0.947 & 0.970 &
+0.975\tabularnewline
+Pos Pred Value & 0.848 & 0.896 & 1.000 & 0.758 & 0.850 &
+0.872\tabularnewline
+Neg Pred Value & 0.958 & 0.965 & 1.000 & 0.943 & 0.948 &
+0.950\tabularnewline
+Precision & 0.848 & 0.896 & 1.000 & 0.758 & 0.850 & 0.872\tabularnewline
+Recall & 0.811 & 0.842 & 1.000 & 0.742 & 0.758 & 0.770\tabularnewline
+F1 & 0.829 & 0.868 & 1.000 & 0.749 & 0.801 & 0.818\tabularnewline
+Prevalence & 0.182 & 0.182 & 0.182 & 0.182 & 0.182 &
+0.182\tabularnewline
+Detection Rate & 0.147 & 0.153 & 0.182 & 0.135 & 0.138 &
+0.140\tabularnewline
+Detection Prevalence & 0.174 & 0.171 & 0.182 & 0.178 & 0.162 &
+0.160\tabularnewline
+Balanced Accuracy & 0.889 & 0.910 & 1.000 & 0.844 & 0.864 &
+0.872\tabularnewline
+\bottomrule
+\end{longtable}
+
+\emph{Table.6} shows the performance of each model, we can see that
+\texttt{ranger} has the highest accuracy of \textbf{1}, followed by
+\texttt{gbm}. a perfect accuracy may be a result of over fitting.
+applying our models to the test set we can see that accuracy of
+\texttt{ranger} falls to \textbf{.87} and \texttt{gbm} falls to
+\textbf{.86}. which indicates that \texttt{gbm} model is more consistent
+and not over fitted.
+
+One more thing to notice that if we set \texttt{RAW} as our positive
+test result we get a \texttt{Prevalence} of \textbf{0.182}, thus the
+high \texttt{Specificity} relative to \texttt{Sensitivity}. trying to
+balance our data set by sampling up and down we get the results in
+\emph{table.7}.
+
+\begin{longtable}[]{@{}lrrr@{}}
+\caption{Model Performance, Balanced Data Set}\tabularnewline
+\toprule
+& up & gbm & down\tabularnewline
+\midrule
+\endfirsthead
+\toprule
+& up & gbm & down\tabularnewline
+\midrule
+\endhead
+Sensitivity & 0.968 & 0.842 & 0.980\tabularnewline
+Specificity & 0.930 & 0.978 & 0.901\tabularnewline
+Pos Pred Value & 0.754 & 0.896 & 0.687\tabularnewline
+Neg Pred Value & 0.992 & 0.965 & 0.995\tabularnewline
+Precision & 0.754 & 0.896 & 0.687\tabularnewline
+Recall & 0.968 & 0.842 & 0.980\tabularnewline
+F1 & 0.847 & 0.868 & 0.808\tabularnewline
+Prevalence & 0.182 & 0.182 & 0.182\tabularnewline
+Detection Rate & 0.176 & 0.153 & 0.178\tabularnewline
+Detection Prevalence & 0.233 & 0.171 & 0.259\tabularnewline
+Balanced Accuracy & 0.949 & 0.910 & 0.941\tabularnewline
+\bottomrule
+\end{longtable}
+
+as we can see in \emph{Table.8}, sampling up/down increased
+\texttt{Balanced\ Accuracy} and increased \texttt{Sensitivity} on the
+expense of \texttt{Specificity}, \texttt{F1} and \texttt{Precision}.
+this means that our model started to predict more \texttt{raw\ foods},
+enough to correctly cover \emph{0.97-0.98} of the \texttt{RAW}
+population but on the expense of predicting more
+\texttt{processed\ foods} as \texttt{raw\ foods}.
+
+Below shows a breakdown for the performance of \texttt{gbm}, and indeed
+we see that sampling enhanced \texttt{Sensitivity}, but decreased
+\texttt{Specificity}. so in conclusion \texttt{gbm} is the more stable
+model and to chose to sample up, down or not to sample at all depends on
+the importance of predicting positive(raw) test results more than
+negative results. but in our case i would prefer a balanced model and
+will chose \texttt{gbm} without sampling.
+
+\newpage
+
+\begin{longtable}[]{@{}lrrrrrrr@{}}
+\caption{GBM, Model Performance Per Group}\tabularnewline
+\toprule
+FoodGroup & Sensitivity & Specificity & Precision & Recall & F1 &
+Prevalence & Balanced Accuracy\tabularnewline
+\midrule
+\endfirsthead
+\toprule
+FoodGroup & Sensitivity & Specificity & Precision & Recall & F1 &
+Prevalence & Balanced Accuracy\tabularnewline
+\midrule
+\endhead
+Dairy and Egg Products & 0.71 & 1.00 & 1.00 & 0.71 & 0.83 & 0.05 &
+0.86\tabularnewline
+Spices and Herbs & 0.77 & NA & 1.00 & 0.77 & 0.87 & 1.00 &
+NA\tabularnewline
+Baby Foods & NA & 0.96 & 0.00 & NA & NA & 0.00 & NA\tabularnewline
+Fats and Oils & NA & 1.00 & NA & NA & NA & 0.00 & NA\tabularnewline
+Poultry Products & 0.92 & 0.98 & 0.96 & 0.92 & 0.94 & 0.32 &
+0.95\tabularnewline
+Soups, Sauces, and Gravies & NA & 1.00 & NA & NA & NA & 0.00 &
+NA\tabularnewline
+Sausages and Luncheon Meats & NA & 0.99 & 0.00 & NA & NA & 0.00 &
+NA\tabularnewline
+Breakfast Cereals & NA & 1.00 & NA & NA & NA & 0.00 & NA\tabularnewline
+Snacks & NA & 1.00 & NA & NA & NA & 0.00 & NA\tabularnewline
+Fruits and Fruit Juices & 0.67 & 0.99 & 0.98 & 0.67 & 0.80 & 0.34 &
+0.83\tabularnewline
+Pork Products & 0.81 & 0.99 & 0.97 & 0.81 & 0.89 & 0.26 &
+0.90\tabularnewline
+Vegetables and Vegetable Products & 0.67 & 0.93 & 0.77 & 0.67 & 0.72 &
+0.25 & 0.80\tabularnewline
+Nut and Seed Products & 0.33 & 1.00 & 1.00 & 0.33 & 0.50 & 0.14 &
+0.67\tabularnewline
+Beef Products & 0.99 & 0.94 & 0.92 & 0.99 & 0.95 & 0.41 &
+0.96\tabularnewline
+Beverages & NA & 1.00 & NA & NA & NA & 0.00 & NA\tabularnewline
+Finfish and Shellfish Products & 0.88 & 0.88 & 0.86 & 0.88 & 0.87 & 0.45
+& 0.88\tabularnewline
+Legumes and Legume Products & 0.92 & 0.99 & 0.96 & 0.92 & 0.94 & 0.16 &
+0.95\tabularnewline
+Lamb, Veal, and Game Products & 0.98 & 0.94 & 0.93 & 0.98 & 0.95 & 0.43
+& 0.96\tabularnewline
+Baked Products & NA & 1.00 & NA & NA & NA & 0.00 & NA\tabularnewline
+Sweets & NA & 1.00 & NA & NA & NA & 0.00 & NA\tabularnewline
+Cereal Grains and Pasta & 0.00 & 1.00 & NA & 0.00 & NA & 0.04 &
+0.50\tabularnewline
+Fast Foods & NA & 1.00 & NA & NA & NA & 0.00 & NA\tabularnewline
+Meals, Entrees, and Side Dishes & NA & 1.00 & NA & NA & NA & 0.00 &
+NA\tabularnewline
+American Indian/Alaska Native Foods & 0.38 & 0.98 & 0.89 & 0.38 & 0.53 &
+0.24 & 0.68\tabularnewline
+Restaurant Foods & NA & 1.00 & NA & NA & NA & 0.00 & NA\tabularnewline
+\bottomrule
+\end{longtable}
+
+\begin{longtable}[]{@{}lrrrrrrr@{}}
+\caption{GBM, Model Performance Per Group, Sampling UP}\tabularnewline
+\toprule
+FoodGroup & Sensitivity & Specificity & Precision & Recall & F1 &
+Prevalence & Balanced Accuracy\tabularnewline
+\midrule
+\endfirsthead
+\toprule
+FoodGroup & Sensitivity & Specificity & Precision & Recall & F1 &
+Prevalence & Balanced Accuracy\tabularnewline
+\midrule
+\endhead
+Dairy and Egg Products & 0.86 & 1.00 & 1.00 & 0.86 & 0.92 & 0.05 &
+0.93\tabularnewline
+Spices and Herbs & 0.91 & NA & 1.00 & 0.91 & 0.95 & 1.00 &
+NA\tabularnewline
+Baby Foods & NA & 0.94 & 0.00 & NA & NA & 0.00 & NA\tabularnewline
+Fats and Oils & NA & 0.99 & 0.00 & NA & NA & 0.00 & NA\tabularnewline
+Poultry Products & 1.00 & 0.91 & 0.85 & 1.00 & 0.92 & 0.32 &
+0.96\tabularnewline
+Soups, Sauces, and Gravies & NA & 0.99 & 0.00 & NA & NA & 0.00 &
+NA\tabularnewline
+Sausages and Luncheon Meats & NA & 0.99 & 0.00 & NA & NA & 0.00 &
+NA\tabularnewline
+Breakfast Cereals & NA & 0.99 & 0.00 & NA & NA & 0.00 &
+NA\tabularnewline
+Snacks & NA & 1.00 & NA & NA & NA & 0.00 & NA\tabularnewline
+Fruits and Fruit Juices & 0.95 & 0.91 & 0.85 & 0.95 & 0.90 & 0.34 &
+0.93\tabularnewline
+Pork Products & 1.00 & 0.94 & 0.84 & 1.00 & 0.91 & 0.26 &
+0.97\tabularnewline
+Vegetables and Vegetable Products & 0.97 & 0.76 & 0.58 & 0.97 & 0.72 &
+0.25 & 0.87\tabularnewline
+Nut and Seed Products & 1.00 & 0.91 & 0.64 & 1.00 & 0.78 & 0.14 &
+0.95\tabularnewline
+Beef Products & 0.99 & 0.90 & 0.87 & 0.99 & 0.93 & 0.41 &
+0.94\tabularnewline
+Beverages & NA & 0.99 & 0.00 & NA & NA & 0.00 & NA\tabularnewline
+Finfish and Shellfish Products & 0.94 & 0.75 & 0.76 & 0.94 & 0.84 & 0.45
+& 0.85\tabularnewline
+Legumes and Legume Products & 1.00 & 0.90 & 0.67 & 1.00 & 0.80 & 0.16 &
+0.95\tabularnewline
+Lamb, Veal, and Game Products & 0.99 & 0.85 & 0.83 & 0.99 & 0.90 & 0.43
+& 0.92\tabularnewline
+Baked Products & NA & 1.00 & 0.00 & NA & NA & 0.00 & NA\tabularnewline
+Sweets & NA & 1.00 & NA & NA & NA & 0.00 & NA\tabularnewline
+Cereal Grains and Pasta & 0.00 & 0.96 & 0.00 & 0.00 & NaN & 0.04 &
+0.48\tabularnewline
+Fast Foods & NA & 1.00 & NA & NA & NA & 0.00 & NA\tabularnewline
+Meals, Entrees, and Side Dishes & NA & 1.00 & NA & NA & NA & 0.00 &
+NA\tabularnewline
+American Indian/Alaska Native Foods & 0.81 & 0.80 & 0.57 & 0.81 & 0.67 &
+0.24 & 0.80\tabularnewline
+Restaurant Foods & NA & 1.00 & NA & NA & NA & 0.00 & NA\tabularnewline
+\bottomrule
+\end{longtable}
+
+\hypertarget{conclusion}{%
+\section{Conclusion}\label{conclusion}}
+
+Data exploration shows that there is a clear difference between raw and
+processed food if we consider food as groups, such as the differences in
+\texttt{Fluoride,\ F}, \texttt{Sodium,\ Na} and \texttt{Vitamin\ C}
+values between raw and processed food. Our model shows that we can
+predict raw/processed food with a \texttt{Balanced\ Accuracy} of
+\textbf{0.91}, \emph{Fig.7} shows the most important differences between
+raw and processed foods, again we can see that \texttt{Sodium,\ Na} and
+\texttt{Vitamin\ C} are important differences between raw and processed
+foods.
+
+\begin{figure}
+
+{\centering \includegraphics{Nutrition_files/figure-latex/unnamed-chunk-8-1} 
+
+}
+
+\caption{Var Importance}\label{fig:unnamed-chunk-8}
+\end{figure}
+
+
+\end{document}

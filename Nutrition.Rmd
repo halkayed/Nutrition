@@ -1,0 +1,626 @@
+---
+title: "Nutrition"
+author: "Hesham Al Kayed"
+date: "8/13/2019"
+output:
+  pdf_document:
+    fig_cap: yes
+    keep_tex: yes
+    number_sections: yes
+header-includes:
+- \usepackage{float}
+- \floatplacement{figure}{H}
+geometry: margin=0.25in
+---
+
+```{r R Packages, include=FALSE, echo=FALSE}
+
+library(tidyverse)
+library(magrittr)
+library(cowplot)
+library(caret)
+```
+
+
+
+```{r Importing SR Data Set, echo=FALSE, include=FALSE, cache=TRUE}
+
+################################################################
+#############   Download and extract tables from ###############
+#############    U.S. DEPARTMENT OF AGRICULTURE  ###############
+################################################################
+d1 <- tempfile()
+
+download.file('https://www.ars.usda.gov/ARSUserFiles/80400525/Data/SR-Legacy/SR-Leg_ASC.zip', d1)
+dir.create('./Data/SR')
+unzip(zipfile = d1, exdir = './Data/SR/')
+
+#################################################################
+###########   Colmuns are seperated by ^             ############
+###########   Colmun names can be found in           ############
+###########   documentation file "SR-Legacy_Doc.pdf" ############
+#################################################################
+
+FOOD_DES <- read_delim('Data/SR/FOOD_DES.txt', '^', 
+                       col_names = c('NDB_No', 'FdGrp_Cd', 'Long_Desc', 'Shrt_Desc', 'ComName', 'ManufacName', 'Survey',
+                                     'Ref_desc', 'Refuse', 'SciName', 'N_Factor', 'Pro_Factor', 'Fat_Factor', 'CHO_Factor'))                              # Food Description
+
+NUTR_DEF <- read_delim('Data/SR/NUTR_DEF.txt', '^', 
+                       col_names = c('Nutr_No', 'Units', 'Tagname', 'NutrDesc', 'Num_Dec', 'SR_Order'))                                                   # Nutrition Descriiption
+
+FD_GROUP <- read_delim('Data/SR/FD_GROUP.txt', '^',
+                       col_names = c('FdGrp_Cd', 'FdGrp_Desc'))                                                                                           # Food Groups Description
+
+NUT_DATA <- read_delim('./Data/SR/NUT_DATA.txt', delim = '^',
+                       col_names = c('NDB_No', 'Nutr_No', 'Nutr_Val', 'Num_Data_Pts', 'Std_Error', 'Src_Cd', 'Deriv_Cd',
+                                     'Ref_NDB_No', 'Add_Nutr_Mark', 'Num_Studies', 'Min', 'Max', 'DF', 'Low_EB', 'Up_EB', 'Stat_cmt', 'AddMod_Date'))     # Nutrition Data, values per 100g.
+```
+
+# Introduction
+
+&nbsp;&nbsp;&nbsp;
+This project aims to build a model that can predict which food is `Raw` and which is `Processed` by examining the food nutrition values and use them as predictors. We will use Nutrition data from `U.S. DEPARTMENT OF AGRICULTURE` website.^[https://www.ars.usda.gov/ARSUserFiles/80400525/Data/SR-Legacy/SR-Leg_ASC.zip].
+
+In `Section 2.1` we Build our data set and format the result as needed. In `Section 2.2` we explore our data to find the difference between `Raw` and `Processed` food, this exploration will be based on `food groups`, which will help us make sense of the data at hand. In `Section 3` we will build a tree based model and compare the performance of different models.
+
+# Exploratory data analysis
+## Data Structure
+
+&nbsp;&nbsp;&nbsp;
+Downloaded data will contain a documentation file and data files. as mentioned in the documentation, data files are carrot '^' delimited. We will use and connect `NUT_DATA`, `NUTR_DEF`, `FOOD_DESC` and `FD_GROUP` tables as described in the documentation. then we will select needed fields and rename them as follow **ProdID = NDB_No , NutrVal = Nutr_Val, ShrtDesc = Shrt_Desc , FoodGroup = FdGrp_Desc**. (left of the equal sign is the new name)
+
+
+```{r Creating DataSet, echo=FALSE, cache=TRUE}
+############################################################
+#############  Collect data that will be used ##############
+#############       in one Data table         ##############
+############################################################
+
+
+DataSet <- NUT_DATA %>%                                                                                     # Nutrintion Values
+  left_join(NUTR_DEF, by = 'Nutr_No') %>%                                                                   # Connected With Nutritions Desc. by 'Nutr_No'
+  select(NDB_No, Nutr_Val, Units, NutrDesc) %>% 
+  left_join(FOOD_DES, by = 'NDB_No') %>%                                                                    # Connected With Food Desc. Table by 'NDB_No'
+  select(NDB_No, Nutr_Val, Units, NutrDesc, FdGrp_Cd, Shrt_Desc, ManufacName) %>% 
+  left_join(FD_GROUP, by = 'FdGrp_Cd') %>%                                                                  # Connected With Food Group Desc by 'FdGrp_Cd'
+  filter(!Units == '~kJ~' & is.na(str_locate(NutrDesc, ':')[,1])) %>%                                       # Fitler to keep Energy In 'kcal' Insted of 'kJ'
+  select(-FdGrp_Cd) %>% mutate_if(is.character, function(x) str_replace_all(x,'~','')) %>%
+  rename('ProdID' = 'NDB_No' ,'NutrVal' = 'Nutr_Val', 'ShrtDesc' = 'Shrt_Desc' ,'FoodGroup' = 'FdGrp_Desc')
+
+
+knitr::kable(head(DataSet), caption = 'Data Set')                                                           # Shows the Header of our Dataset
+
+############################################################
+#############  Find Missing Data, and Data Types ###########
+############################################################
+
+
+rbind(sapply(DataSet, typeof),                            
+      sapply(1:ncol(DataSet), function(c) sum(is.na(DataSet[,c]))),
+      sapply(1:ncol(DataSet), function(c) sum(DataSet[,c] %in% c('',' ')))) %>% 
+  set_colnames(colnames(DataSet)) %>% 
+  set_rownames(c('Type','NA', 'Empty')) %>%
+  knitr::kable(caption = "Types and Missing Data")
+
+###############################################
+#############  Count Unique Values  ###########
+###############################################
+
+apply(DataSet, 2, function(x){
+  
+  unique(x) %>% length()
+
+}) %>% t %>%knitr::kable(caption = 'Unique Values')
+
+```
+
+
+&nbsp;&nbsp;&nbsp;
+As we can see in *Table.2* all variables are complete except for `ManufacName`, which as per downloaded documentation is only available if possible. Our data set have `r ncol(DataSet)` variables and `r nrow(DataSet)` records. we can see from *Table.3* that we have 7793 products and 7790 descriptions which indicates a duplicated product ID.
+
+\newpage
+
+```{r Duplicated IDs, echo=FALSE}
+
+###############################################
+#############  Duplicated ProdIDs   ###########
+###############################################
+
+# Duplicated Short Description.
+# filter for ShrtDesc which
+# have more than one ProdID
+DupShrtDesc <- DataSet %>%
+  select(ProdID, ShrtDesc) %>%
+  distinct %>%
+  group_by(ShrtDesc) %>%
+  summarize(N = n()) %>%
+  filter(N>1) %>%
+  select(ShrtDesc) %>%
+  unlist
+
+# Find ProdIDs which crosspond 
+# to duplicated ShrtDesc.
+
+DupProducts <- DataSet %>% 
+  filter(ShrtDesc %in% DupShrtDesc) %>%
+  select(ProdID,ShrtDesc) %>%
+  distinct() 
+
+DupProducts %>% knitr::kable(caption = 'Duplicated IDs')
+
+```
+
+by removing duplicated IDs we get below table.
+
+```{r removing duplicated ID, echo=FALSE}
+DataSet <- DupProducts %>%
+  select(ProdID) %>%
+  {.[seq(1,nrow(.),2),]} %>%               # Select the first ID from every Duplicated ID
+  unlist() %>%
+  {DataSet[!DataSet$ProdID %in% .,]}       # Filter for every ID except above select IDs
+
+apply(DataSet, 2, function(x){
+  
+  unique(x) %>% length()
+
+}) %>% t %>%knitr::kable(caption = 'Unique Values')
+```
+
+
+
+## Data Description
+
+
+```{r, echo=FALSE, include=FALSE}
+
+##################################################
+########## Defineing Raw and Processed ###########
+########## Define Raw and Processed ##############
+##################################################
+
+DataSet %<>%  
+  mutate(RawFood = if_else(str_detect(string = DataSet$ShrtDesc,
+                                      pattern = '(?<![:alpha:])(RAW)(?![:alpha:])') & 
+                             !FoodGroup == 'Sausages and Luncheon Meats','RAW','PROC'),   # if contains raw and not in Sausages and Luncheon Meats, then raw.
+         RawFood = if_else(FoodGroup == 'Sausages and Luncheon Meats','PROC',RawFood),    # if in Sausages and Luncheon Meats, then Processed.
+         RawFood = if_else(FoodGroup == 'Spices and Herbs','RAW',RawFood))                # if in Spices and Herbs, then raw.
+
+```
+
+&nbsp;&nbsp;&nbsp;
+As we want to build a model to classify *raw foods* from *processed food* we will start by exploring the difference between raw and processed food. we will separate raw foods from processed foods by searching for **'RAW'**, in the short description field using the following Reg. expression `'(?<![:alpha:])RAW(?![:alpha:])'`, and we will consider every product in `Sausages and Luncheon Meats` as processed product and every product in `Spices and Herbs` as raw food, Available data have `r DataSet %>% select(ProdID, RawFood) %>% distinct %$% table(RawFood)[1]` Processed products and `r DataSet %>% select(ProdID, RawFood) %>% distinct %$% table(RawFood)[2]` raw foods.^[We have to note that this method of differentiating between raw and processed food may not include all cases. but because we don't know how the data is constructed and their is no mention to this information in the documentation, we will assume that this method is correct]. 
+
+```{r, echo=FALSE,fig.align='center', fig.height=6.5,fig.width=10, fig.cap='Comparing Raw and Processed Foods Energy Values'}
+
+DataSet %>%
+  filter(Units == 'kcal') %>%
+  select(FoodGroup, NutrVal, RawFood) %>%
+  mutate(FoodGroup = as.factor(FoodGroup), FoodGroup = reorder(FoodGroup, NutrVal,'median')) %>%
+  ggplot(aes(FoodGroup, NutrVal, fill = RawFood)) +
+  geom_boxplot() +
+  xlab('')+
+  ylab('Energy, kcal')+
+  theme_classic() +
+  theme(axis.text.x = element_text(angle = 90))
+  
+
+```
+
+*Fig.1* shows that Processed food on average have more kaloris per 100g. we can see that this does not apply to `Legumes and Legume Product`. *Fig.2* Shows the median value for each of the energy sources in food, we can see that most raw foods do not have sugar in them and processed food does, raw `Legumes and Legume Product` have more protein and more carbohydrate than processed `Legumes and Legume Product`, which can explain why raw `Legumes and Legume Product` has more energy than processed `Legumes and Legume Product` and other food groups don't.
+
+Fiber content per 100g does not deffer much between processed and raw foods, except for `Legumes and Legume Products` as shown in *Fig.3*. we can see in *Fig.4* that all raw foods except `Legumes and Legume Product` have more water content.
+
+
+
+```{r, echo=FALSE,fig.align='center', fig.height = 6,fig.width=10, fig.cap='Energy Sources In Food'}
+
+
+DataSet %>%
+  filter(str_detect(NutrDesc,'Sugar|Fat|Protein|Carbohydrate')) %>%
+  select(FoodGroup, NutrDesc,NutrVal, RawFood) %>%
+  mutate(IsSugar = if_else(str_detect(NutrDesc,'Fat'),'Fat',NutrDesc),
+         IsSugar = if_else(IsSugar == 'Carbohydrate, by difference', 'Carbohydrate', IsSugar),
+         IsSugar = if_else(IsSugar == 'Sugars, total', 'Sugars', IsSugar))%>%
+  group_by(FoodGroup,IsSugar,RawFood) %>%
+  summarize(NutrVal = median(NutrVal)) %>%
+  ggplot(aes(FoodGroup, NutrVal, fill=IsSugar)) +
+  geom_bar(position = 'stack' , stat= "identity") +
+  coord_flip() +
+  xlab('')+
+  ylab('gram / 100g') +
+  guides(fill=guide_legend(title="Energy Source")) +
+  facet_wrap(. ~ RawFood) +
+  theme(axis.text.x = element_text(angle = 90)) +
+  theme_linedraw()
+```
+
+
+&nbsp;&nbsp;&nbsp;
+*Fig.5* and *Fig.6* show the content of `Minerals` and `Vitamins` in each food group and enable us to compare raw and processed foods in that group. scale used is based on the **median value** for each group. Numerical values shows **q75, median and q25** (Upper, meddle and lower).
+
+At first glance we can see that raw foods rarely contains any `Fluoride, F` and most processed foods contain `Fluoride, F`. `Sodium, Na` will range higher in processed products compared to raw foods, but again `Legumes and Legume Products` values are higher in its raw form compared to its processed form.
+
+`Calcium, Ca` to my surprise scours the highest in `Spices and Herbs` in its raw form, with more than double the value compared to `Dairy and Egg Products` in its processed form. `Spices and Herbs` have the highest `Iron, Fe`, `Manganese, Mn` in all food groups, and high content value for other Minerals, although you cant eat much `Spices and Herbs` in one day, mixing them with food seems like a nutritious idea.
+
+we can find another difference in `Vintamin C` as we can see that it rangers higher in raw foods, and its main source are plants sourced food, `Vegetables, Fruits, Nuts/Seeds and Spices/Herbs`.
+
+above are a small part of our data. we can further explore the ratio of fat and carbohydrates different types in each food group and much more. but we cant explore every detail in this project because this is a much larger subject, and i don't have domain knowledge to do so.
+
+
+
+\newpage
+
+```{r, echo=FALSE,fig.align='center', fig.height = 6,fig.width=10, fig.cap='Fiber In Food'}
+DataSet %>%
+  filter(str_detect(NutrDesc,'Fiber')) %>%
+  select(FoodGroup, NutrDesc,NutrVal, RawFood,Units) %>%
+  mutate(IsSugar = if_else(str_detect(NutrDesc,'Fat'),'Fat',NutrDesc),
+         IsSugar = if_else(IsSugar == 'Carbohydrate, by difference', 'Carbohydrate', IsSugar),
+         IsSugar = if_else(IsSugar == 'Sugars, total', 'Sugars', IsSugar)) %>% 
+  mutate(FoodGroup = as.factor(FoodGroup), FoodGroup = reorder(FoodGroup, NutrVal,'median'))%>%
+  ggplot(aes(FoodGroup, NutrVal, fill=RawFood)) + 
+  geom_boxplot()+
+  xlab('')+
+  ylab('gram /100g')+
+  theme_classic()+
+  theme(axis.text.x = element_text(angle = 90))
+```
+
+
+```{r, echo=FALSE ,fig.align='center', fig.height = 6,fig.width=10, fig.cap='Water In Food'}
+DataSet %>% 
+  filter(str_detect(NutrDesc,'Water')) %>%
+  mutate(FoodGroup = as.factor(FoodGroup),
+         FoodGroup = reorder(FoodGroup, NutrVal, 'median')) %>%
+  ggplot(aes(FoodGroup,NutrVal, fill=RawFood))+
+  geom_boxplot()+
+  xlab('')+
+  ylab('gram /100g')+
+  theme_classic()+
+  theme(axis.text.x = element_text(angle = 90))
+```
+
+\newpage
+
+
+```{r, echo=FALSE, fig.height=14, fig.width=10,fig.cap='Minerals in Food',warning=FALSE}
+Minerals <- DataSet %>% 
+  distinct(NutrDesc) %>%
+  filter(str_detect(NutrDesc,',') & 
+           ! str_detect(NutrDesc, 'Vitamin') & 
+           str_detect(NutrDesc, '(?<=\\s)[:alpha:]{1,2}$')) %>% 
+  unlist
+
+
+FG <- DataSet %>% distinct(FoodGroup) %>% arrange(FoodGroup) %>% unlist()
+#StringFoodGroup <- ''
+#for (i in FG) {
+#    StringFoodGroup <- paste(StringFoodGroup,i,sep = '\n\n')}
+
+
+
+map(Minerals, function(M){
+                    
+                    P<-DataSet %>% 
+                      filter(NutrDesc == M) %>%
+                      select(NutrDesc, FoodGroup ,NutrDesc, NutrVal ,Units, RawFood) %>% 
+                      #mutate(FoodGroup = str_wrap(FoodGroup, 10)) %>%
+                      #nest(-NutrDesc) %>% 
+                      #mutate(ScaledNutrVal = map(`data`, function(U) U$NutrVal %>% {(.-min(.))/diff(range(.))})) %>% 
+                      #unnest %>% 
+                      group_by(FoodGroup, NutrDesc,RawFood) %>%
+                      summarize(ScaledNutrVal = median(NutrVal,                 na.rm = TRUE),
+                                NutrValq75    = quantile(NutrVal, probs = 0.75, na.rm = TRUE),
+                                NutrValq25    = quantile(NutrVal, probs = 0.25, na.rm = TRUE)) %>%
+                      right_join(expand.grid(FoodGroup = unique(DataSet$FoodGroup),
+                         NutrDesc  = unique(.$NutrDesc),
+                         RawFood   = unique(.$RawFood)), by = c('FoodGroup', 'NutrDesc', 'RawFood')) %>%
+                      mutate(ScaledNutrVal = if_else(is.na(ScaledNutrVal),0,ScaledNutrVal),
+                             NutrValq25 = if_else(is.na(NutrValq25),0,NutrValq25),
+                             NutrValq75 = if_else(is.na(NutrValq75),0,NutrValq75),
+                             TXT           = paste(
+                               as.character(round(NutrValq75,3)),
+                               as.character(round(ScaledNutrVal,3)),
+                               as.character(round(NutrValq25,3)), sep='\n')) %>%
+                      ggplot(aes(FoodGroup, NutrDesc, fill = ScaledNutrVal, label = TXT)) + 
+                      geom_tile(na.rm = TRUE, show.legend = FALSE) +
+                      geom_text(size = 2.5)+
+                      xlab('')+
+                      ylab('')+
+                      #ggtitle(label = M)+
+                      facet_grid(RawFood~.)+
+                      scale_fill_distiller(palette = "Spectral")+
+                      theme_dark()+
+                      theme(#axis.text.x = element_text(angle = 90), 
+                            axis.title.x=element_blank(),
+                            axis.text.x=element_blank(),
+                            axis.ticks.x=element_blank(),
+                            axis.title.y=element_blank(),
+                            axis.text.y=element_blank(),
+                            axis.ticks.y=element_blank(),
+                            plot.margin = unit(c(0, 0, 0, 0), "lines"),
+                            title = element_text(size = 9),
+                            text = element_text(size = 8),
+                            panel.spacing = unit(0,'lines')
+                            )
+                    
+    cowplot::plot_grid(ggplot() + 
+                         annotate("text", x = 0, y = 0, size = 4,angle = 90, label = str_wrap(M)) + 
+                         theme_void(),
+                       P,
+                       rel_widths = c(1,20) )
+                    
+                  }) %>% 
+  #modify_at(.at = length(.),.f =  function(x) x + theme(axis.text.x = element_text(angle = 90, face = 'bold')))%>%
+  cowplot::plot_grid(plotlist = .,ncol = 1) %>%
+  cowplot::plot_grid(
+                       cowplot::plot_grid(
+                         ggplot() + 
+                           annotate("text", x = 0, y = 0, size = 4,angle = 90, label = '           ') + 
+                           theme_void()+
+                           theme(plot.margin = unit(c(0, 0, 0, 0), "lines"),
+                                 panel.spacing = unit(0,'lines')),
+                         ggplot()+
+                           theme_void() +
+                           theme(plot.margin = unit(c(0, 0, 0, 0), "lines"),
+                                 panel.spacing = unit(0,'lines')) +
+                           cowplot::draw_text(FG, x = seq(0, 0+(0.037*24), 0.0367), y = 0, angle=90, size = 9, face = 'bold', hjust = 'center') ,rel_widths = c(0.7,20) ) +
+                         theme(plot.margin = unit(c(0, 0, 0, 0), "lines"),
+                                 panel.spacing = unit(0,'lines'))
+                     ,.,ncol = 1, rel_heights = c(0.2:20))
+
+```
+
+\newpage
+
+```{r, echo=FALSE, fig.height=14, fig.width=10,  fig.cap='Vitamins in Food',warning=FALSE}
+Minerals <- DataSet %>% 
+  distinct(NutrDesc) %>%
+  filter(str_detect(NutrDesc, '^Vitamin'))  %>% 
+  unlist
+
+
+FG <- DataSet %>% distinct(FoodGroup) %>% arrange(FoodGroup) %>% unlist()
+
+map(Minerals, function(M){
+                    
+                    P<-DataSet %>% 
+                      filter(NutrDesc == M) %>%
+                      select(NutrDesc, FoodGroup ,NutrDesc, NutrVal ,Units, RawFood) %>% 
+                      mutate(FoodGroup = FoodGroup) %>%
+                      group_by(FoodGroup, NutrDesc,RawFood) %>%
+                      summarize(ScaledNutrVal = median(NutrVal                , na.rm = TRUE),
+                                NutrValq75    = quantile(NutrVal, probs = 0.75, na.rm = TRUE),
+                                NutrValq25    = quantile(NutrVal, probs = 0.25, na.rm = TRUE)) %>%
+                      right_join(expand.grid(FoodGroup = unique(DataSet$FoodGroup),
+                         NutrDesc  = unique(.$NutrDesc),
+                         RawFood   = unique(.$RawFood)), by = c('FoodGroup', 'NutrDesc', 'RawFood')) %>%
+                      mutate(ScaledNutrVal = if_else(is.na(ScaledNutrVal),0,ScaledNutrVal),
+                             NutrValq25    = if_else(is.na(NutrValq25),0,NutrValq25),
+                             NutrValq75    = if_else(is.na(NutrValq75),0,NutrValq75),
+                             TXT           = paste(as.character(round(NutrValq75,3)),
+                                                                as.character(round(ScaledNutrVal,3)),
+                                                                as.character(round(NutrValq25,3)), sep='\n')) %>%
+                      ggplot(aes(FoodGroup, NutrDesc, fill = ScaledNutrVal, label = TXT)) + 
+                      geom_tile(na.rm = TRUE, show.legend = FALSE) +
+                      geom_text(size = 2.5)+
+                      xlab('')+
+                      ylab('')+
+                      #ggtitle(label = M)+
+                      facet_grid(RawFood~.)+
+                      scale_fill_distiller(palette = "Spectral")+
+                      theme_dark()+
+                      theme(#axis.text.x = element_text(angle = 90), 
+                            axis.title.x=element_blank(),
+                            axis.text.x=element_blank(),
+                            axis.ticks.x=element_blank(),
+                            axis.title.y=element_blank(),
+                            axis.text.y=element_blank(),
+                            axis.ticks.y=element_blank(),
+                            plot.margin = unit(c(0, 0, 0, 0), "lines"),
+                            title = element_text(size = 9),
+                            text = element_text(size = 8),
+                            panel.spacing = unit(0,'lines')
+                            )
+                    
+    cowplot::plot_grid(ggplot() + 
+                         annotate("text", x = 0, y = 0, size = 3,angle = 90, label = str_wrap(M,15)) + 
+                         theme_void(),
+                       P,
+                       rel_widths = c(1,20) )
+                    
+                  }) %>% 
+  #modify_at(.at = length(.),.f =  function(x) x + theme(axis.text.x = element_text(angle = 90, face = 'bold')))%>%
+  cowplot::plot_grid(plotlist = .,ncol = 1) %>%
+  cowplot::plot_grid(
+                       cowplot::plot_grid(
+                         ggplot() + 
+                           annotate("text", x = 0, y = 0, size = 4,angle = 90, label = '           ') + 
+                           theme_void()+
+                           theme(plot.margin = unit(c(0, 0, 0, 0), "lines"),
+                                 panel.spacing = unit(0,'lines')),
+                         ggplot()+
+                           theme_void() +
+                           theme(plot.margin = unit(c(0, 0, 0, 0), "lines"),
+                                 panel.spacing = unit(0,'lines')) +
+                           cowplot::draw_text(FG, x = seq(0, 0+(0.037*24), 0.0367), y = 0, angle=90, size = 9, 'bold', hjust = 'center') ,rel_widths = c(0.7,20) ) +
+                         theme(plot.margin = unit(c(0, 0, 0, 0), "lines"),
+                                 panel.spacing = unit(0,'lines'))
+                     ,.,ncol = 1, rel_heights = c(0.2:20))
+
+```
+
+\newpage
+
+# Building Our Model
+
+&nbsp;&nbsp;&nbsp;
+We want to build a model that can classify if a food product is `Raw` or `Processed` using its nutrition values. We will use tree based models, because they are easy to use and they will reveal more differences between raw and processed foods by finding variable importance in our model. we will split our data set based on `RawFood` field into training and test sets. any nutrients defined as `added` will be deleted. Below shows the structure of our training set.
+
+we will compare *ctree* from *party* package, *gbm* from *gbm* package and *ranger* from *ranger* package. we will not use `FoodGroup` field to build our model, but we will keep it to compare the performance of our models through different food groups.
+
+
+```{r Spliting Our DataSet, echo=FALSE, cache=TRUE}
+
+set.seed(15)
+
+TempSet<-DataSet %>% filter(!str_detect(NutrDesc, 'added')) %>% 
+  select(ProdID, FoodGroup, RawFood, NutrDesc, NutrVal) %>%
+  spread(NutrDesc, NutrVal, 0) %>%
+  mutate(FoodGroup = as.factor(FoodGroup),
+         RawFood   = as.factor(RawFood))
+
+TrainIndex <- createDataPartition(y = TempSet$RawFood, times = 1, p = 0.5, list = FALSE)
+
+TrainSet <- TempSet[ TrainIndex,-1]
+TestSet  <- TempSet[-TrainIndex,-1]
+
+str(TrainSet)
+
+```
+
+
+```{r ctree, echo=FALSE, include=FALSE,cache=TRUE}
+
+fit_ctree   <- train(RawFood~.,
+                     data = TrainSet[,-1],
+                     method = 'ctree',
+                     trControl = trainControl(method = "repeatedcv",
+                                              number = 10, 
+                                              repeats = 10))
+fit_gbm  <- train(RawFood~.,
+                     data = TrainSet[,-1],
+                     method = 'gbm',
+                     trControl = trainControl(method = "repeatedcv",
+                                              number = 10, 
+                                              repeats = 10))
+
+fit_ranger     <- train(RawFood~.,
+                     data = TrainSet[,-1],
+                     method = 'ranger',
+                     trControl = trainControl(method = "repeatedcv",
+                                              number = 10, 
+                                              repeats = 10))
+
+```
+
+\newpage
+
+
+```{r Model Performance Training Set, echo=FALSE}
+sapply(list(fit_ctree,fit_gbm, fit_ranger), function(FIT) {
+  confusionMatrix(data = predict(FIT, TrainSet), TrainSet$RawFood %>% as.factor(),
+                  positive = 'RAW')$byClass
+  }) %>%
+  cbind(sapply(list(fit_ctree,fit_gbm, fit_ranger), function(FIT) {
+  confusionMatrix(data = predict(FIT, TestSet), TestSet$RawFood %>% as.factor(),
+                  positive = 'RAW')$byClass
+  }) ) %>%
+  set_colnames(c('ctree_Training', 'gbm_Training', 'ranger_Training',
+                 'ctree_Test', 'gbm_Test', 'ranger_Test')) %>%
+  apply(2, function(x) if(is.numeric(x)){round(x,3)}) %>%
+  knitr::kable(caption = 'Model Performance, Training Set')
+
+```
+
+*Table.6* shows the performance of each model, we can see that `ranger` has the highest accuracy of **1**, followed by `gbm`. a perfect accuracy may be a result of over fitting. applying our models to the test set we can see that accuracy of `ranger` falls to **.87** and `gbm` falls to **.86**. which indicates that `gbm` model is more consistent and not over fitted.
+
+One more thing to notice that if we set `RAW` as our positive test result we get a `Prevalence` of **0.182**, thus the high `Specificity` relative to `Sensitivity`. trying to balance our data set by sampling up and down we get the results in *table.7*.
+
+
+```{r ctree2, echo=FALSE, include=FALSE,cache=TRUE}
+
+fit_gbm_down   <- train(RawFood~.,
+                     data = TrainSet[,-1],
+                     method = 'gbm',
+                     trControl = trainControl(method = "repeatedcv",
+                                              number = 10, 
+                                              repeats = 10, 
+                                              verboseIter = FALSE,
+                                              sampling = "down"))
+
+fit_gbm_up   <- train(RawFood~.,
+                     data = TrainSet[,-1],
+                     method = 'gbm',
+                     trControl = trainControl(method = "repeatedcv",
+                                              number = 10, 
+                                              repeats = 10, 
+                                              verboseIter = FALSE,
+                                              sampling = "up"))
+
+```
+
+
+```{r Model Performance2, echo=FALSE}
+sapply(list(fit_gbm_up,fit_gbm, fit_gbm_down), function(FIT) {
+  confusionMatrix(data = predict(FIT, TrainSet),
+                  TrainSet$RawFood %>% as.factor(),
+                  positive = 'RAW')$byClass
+  }) %>%
+  set_colnames(c('up','gbm','down')) %>%
+  apply(2, function(x) if(is.numeric(x)){round(x,3)}) %>%
+  knitr::kable(caption = 'Model Performance, Balanced Data Set')
+
+```
+
+as we can see in *Table.8*, sampling up/down increased `Balanced Accuracy` and increased `Sensitivity` on the expense of `Specificity`, `F1` and `Precision`. this means that our model started to predict more `raw foods`, enough to correctly cover *0.97-0.98* of the `RAW` population but on the expense of predicting more `processed foods` as `raw foods`.
+
+Below shows a breakdown for the performance of `gbm`, and indeed we see that sampling enhanced `Sensitivity`, but decreased `Specificity`. so in conclusion `gbm` is the more stable model and to chose to sample up, down or not to sample at all depends on the importance of predicting positive(raw) test results more than negative results. but in our case i would prefer a balanced model and will chose `gbm` without sampling.
+
+
+
+\newpage
+
+
+```{r Model Performanfe Per Group, echo=FALSE}
+
+TrainSet %>%
+  mutate(RawFood_hat = predict(object = fit_gbm, newdata = .)) %>%
+  select(FoodGroup, RawFood, RawFood_hat) %>% 
+  nest(-FoodGroup, .key = 'SET') %>% 
+  mutate(MP = map(SET, function(x) confusionMatrix(data = x$RawFood_hat, reference = x$RawFood,  positive = 'RAW')$byClass %>% t %>% as_tibble )) %>%
+  select(-SET) %>%
+  unnest() %>%
+  mutate_if(is.numeric, function(x) round(x,2))%>%
+  select(FoodGroup, Sensitivity, Specificity, Precision, Recall, F1, Prevalence, `Balanced Accuracy`) %>%
+  knitr::kable(caption = 'GBM, Model Performance Per Group')
+  
+
+```
+
+
+```{r Model Performanfe Per Group2, echo=FALSE}
+
+TrainSet %>%
+  mutate(RawFood_hat = predict(object = fit_gbm_up, newdata = .)) %>%
+  select(FoodGroup, RawFood, RawFood_hat) %>% 
+  nest(-FoodGroup, .key = 'SET') %>% 
+  mutate(MP = map(SET, function(x) confusionMatrix(data = x$RawFood_hat, reference = x$RawFood,  positive = 'RAW')$byClass %>% t %>% as_tibble )) %>%
+  select(-SET) %>%
+  unnest() %>%
+  mutate_if(is.numeric, function(x) round(x,2))%>%
+  select(FoodGroup, Sensitivity, Specificity, Precision, Recall, F1, Prevalence, `Balanced Accuracy`) %>%
+  knitr::kable(caption = 'GBM, Model Performance Per Group, Sampling UP')
+
+```
+
+
+# Conclusion
+
+Data exploration shows that there is a clear difference between raw and processed food if we consider food as groups, such as the differences in `Fluoride, F`, `Sodium, Na` and `Vitamin C` values between raw and processed food. Our model shows that we can predict raw/processed food with a `Balanced Accuracy` of **0.91**, *Fig.7* shows the most important differences between raw and processed foods, again we can see that `Sodium, Na` and `Vitamin C` are important differences between raw and processed foods.
+
+
+
+```{r, echo=FALSE,fig.align='center', fig.height = 6,fig.width=10, fig.cap='Var Importance'}
+
+gbm::summary.gbm(fit_gbm$finalModel, plotit = FALSE) %>%
+  head(20) %>%
+  as_tibble() %>%
+  mutate(var = as.factor(var),
+         var = reorder(var,rel.inf)) %>%
+  ggplot(aes(var,rel.inf, fill = rel.inf)) +
+  geom_col() + coord_flip()+
+  theme(axis.text.x = element_text(angle = 90))
+
+```
+
